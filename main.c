@@ -90,23 +90,45 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     {
         ID3D11Device*        baseDevice;
         ID3D11DeviceContext* baseDeviceContext;
-        D3D_FEATURE_LEVEL    featureLevels[] = {D3D_FEATURE_LEVEL_11_0};
-        UINT                 creationFlags   = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+
+        D3D_DRIVER_TYPE driver_types[] = {
+            D3D_DRIVER_TYPE_HARDWARE,
+            D3D_DRIVER_TYPE_WARP,
+            D3D_DRIVER_TYPE_SOFTWARE,
+            D3D_DRIVER_TYPE_REFERENCE,
+        };
+
+        D3D_FEATURE_LEVEL featureLevels[] = {
+            D3D_FEATURE_LEVEL_11_1,
+            D3D_FEATURE_LEVEL_11_0,
+            D3D_FEATURE_LEVEL_10_1,
+            D3D_FEATURE_LEVEL_10_0,
+            D3D_FEATURE_LEVEL_9_3,
+            D3D_FEATURE_LEVEL_9_2,
+            D3D_FEATURE_LEVEL_9_1,
+        };
+        UINT creationFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
 #ifndef NDEBUG
         creationFlags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
+        HRESULT hResult = S_OK;
+        for (int i = 0; i < ARRLEN(driver_types); i++)
+        {
+            hResult = D3D11CreateDevice(
+                0,
+                driver_types[i],
+                0,
+                creationFlags,
+                featureLevels,
+                ARRLEN(featureLevels),
+                D3D11_SDK_VERSION,
+                &baseDevice,
+                0,
+                &baseDeviceContext);
+            if (hResult == S_OK)
+                break;
+        }
 
-        HRESULT hResult = D3D11CreateDevice(
-            0,
-            D3D_DRIVER_TYPE_HARDWARE,
-            0,
-            creationFlags,
-            featureLevels,
-            ARRAYSIZE(featureLevels),
-            D3D11_SDK_VERSION,
-            &baseDevice,
-            0,
-            &baseDeviceContext);
         if (FAILED(hResult))
         {
             MessageBoxA(0, "D3D11CreateDevice() failed", "Fatal Error", MB_OK);
