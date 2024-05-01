@@ -2,13 +2,20 @@
 #define NOMINMAX
 #define CINTERFACE
 #define COBJMACROS
-#include <d3d11_1.h>
-#include <stdbool.h>
 #include <windows.h>
+
+#include <d3d11_1.h>
+#include <d3dcompiler.h>
+#include <stdbool.h>
+#include <stdio.h>
+
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxguid.lib")
+#pragma comment(lib, "d3dcompiler.lib")
 #define xassert(cond) (cond) ? (void)0 : __debugbreak()
 #define ARRLEN(a)     (sizeof(a) / sizeof(a[0]))
+
+static bool g_window_resized = false;
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
@@ -21,6 +28,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         break;
     case WM_DESTROY:
         PostQuitMessage(0);
+        break;
+    case WM_SIZE:
+        g_window_resized = true;
         break;
     default:
         result = DefWindowProcA(hwnd, msg, wparam, lparam);
@@ -76,7 +86,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     // Create D3D11 Device and Context
     ID3D11Device1*        d3d11Device;
-    ID3D11DeviceContext1* d3d11DeviceContext;
+    ID3D11DeviceContext1* device_ctx;
     {
         ID3D11Device*        baseDevice;
         ID3D11DeviceContext* baseDeviceContext;
@@ -111,7 +121,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         hResult = baseDeviceContext->lpVtbl->QueryInterface(
             baseDeviceContext,
             &IID_ID3D11DeviceContext1,
-            (void**)&d3d11DeviceContext);
+            (void**)&device_ctx);
         xassert(SUCCEEDED(hResult));
         baseDeviceContext->lpVtbl->Release(baseDeviceContext);
     }
@@ -205,20 +215,175 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         framebuffer->lpVtbl->Release(framebuffer);
     }
 
+    // Create Vertex Shader
+    ID3DBlob*           vsBlob;
+    ID3D11VertexShader* vertexShader;
+    {
+        ID3DBlob* err_blob;
+        HRESULT   hResult = D3DCompileFromFile(SHADER_PATH, NULL, NULL, "vs_main", "vs_5_0", 0, 0, &vsBlob, &err_blob);
+        if (FAILED(hResult))
+        {
+            const char* errorString = NULL;
+            if (hResult == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND))
+                errorString = "Could not compile shader; file not found";
+            else if (err_blob)
+            {
+                errorString = (const char*)err_blob->lpVtbl->GetBufferPointer(err_blob);
+                err_blob->lpVtbl->Release(err_blob);
+            }
+            MessageBoxA(0, errorString, "Shader Compiler Error", MB_ICONERROR | MB_OK);
+            return 1;
+        }
+
+        hResult = d3d11Device->lpVtbl->CreateVertexShader(
+            d3d11Device,
+            vsBlob->lpVtbl->GetBufferPointer(vsBlob),
+            vsBlob->lpVtbl->GetBufferSize(vsBlob),
+            NULL,
+            &vertexShader);
+        xassert(SUCCEEDED(hResult));
+    }
+
+    // Create Pixel Shader
+    ID3D11PixelShader* pixelShader;
+    {
+        ID3DBlob* ps_blob;
+        ID3DBlob* err_blob;
+        HRESULT   hResult = D3DCompileFromFile(SHADER_PATH, NULL, NULL, "ps_main", "ps_5_0", 0, 0, &ps_blob, &err_blob);
+        if (FAILED(hResult))
+        {
+            const char* errorString = NULL;
+            if (hResult == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND))
+                errorString = "Could not compile shader; file not found";
+            else if (err_blob)
+            {
+                errorString = (const char*)err_blob->lpVtbl->GetBufferPointer(err_blob);
+                err_blob->lpVtbl->Release(err_blob);
+            }
+            MessageBoxA(0, errorString, "Shader Compiler Error", MB_ICONERROR | MB_OK);
+            return 1;
+        }
+
+        hResult = d3d11Device->lpVtbl->CreatePixelShader(
+            d3d11Device,
+            ps_blob->lpVtbl->GetBufferPointer(ps_blob),
+            ps_blob->lpVtbl->GetBufferSize(ps_blob),
+            NULL,
+            &pixelShader);
+        xassert(SUCCEEDED(hResult));
+        ps_blob->lpVtbl->Release(ps_blob);
+    }
+
+    // Create Input Layout
+    ID3D11InputLayout* inputLayout;
+    {
+        D3D11_INPUT_ELEMENT_DESC inputElementDesc[] = {
+            {"POS", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"COL",
+             0,
+             DXGI_FORMAT_R32G32B32A32_FLOAT,
+             0,
+             D3D11_APPEND_ALIGNED_ELEMENT,
+             D3D11_INPUT_PER_VERTEX_DATA,
+             0}};
+
+        HRESULT hResult = d3d11Device->lpVtbl->CreateInputLayout(
+            d3d11Device,
+            inputElementDesc,
+            ARRAYSIZE(inputElementDesc),
+            vsBlob->lpVtbl->GetBufferPointer(vsBlob),
+            vsBlob->lpVtbl->GetBufferSize(vsBlob),
+            &inputLayout);
+        xassert(SUCCEEDED(hResult));
+        vsBlob->lpVtbl->Release(vsBlob);
+    }
+
+    // Create Vertex Buffer
+    ID3D11Buffer* vertexBuffer;
+    UINT          numVerts;
+    UINT          stride;
+    UINT          offset;
+    {
+        struct Vert
+        {
+            float x, y;
+            float r, g, b, a;
+        };
+        // clang-format off
+        struct Vert vertexData[] = {
+            // x,    y,    r,   g,   b,   a
+            { 0.0f,  0.5f, 0.f, 1.f, 0.f, 1.f},
+            { 0.5f, -0.5f, 1.f, 0.f, 0.f, 1.f},
+            {-0.5f, -0.5f, 0.f, 0.f, 1.f, 1.f},
+        };
+        // clang-format on
+        stride   = sizeof(vertexData[0]);
+        numVerts = ARRLEN(vertexData);
+        offset   = 0;
+
+        D3D11_BUFFER_DESC vertexBufferDesc = {0};
+        vertexBufferDesc.ByteWidth         = sizeof(vertexData);
+        vertexBufferDesc.Usage             = D3D11_USAGE_IMMUTABLE;
+        vertexBufferDesc.BindFlags         = D3D11_BIND_VERTEX_BUFFER;
+
+        D3D11_SUBRESOURCE_DATA vertexSubresourceData = {vertexData};
+
+        HRESULT hResult =
+            d3d11Device->lpVtbl->CreateBuffer(d3d11Device, &vertexBufferDesc, &vertexSubresourceData, &vertexBuffer);
+        xassert(SUCCEEDED(hResult));
+    }
+
     MSG  msg;
-    BOOL running = TRUE;
+    bool running = true;
     while (running)
     {
         while (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE))
         {
             if (msg.message == WM_QUIT)
-                running = FALSE;
+                running = false;
             TranslateMessage(&msg);
             DispatchMessageA(&msg);
         }
 
-        FLOAT backgroundColor[4] = {1.0f, 0.5f, 1.0f, 1.0f};
-        d3d11DeviceContext->lpVtbl->ClearRenderTargetView(d3d11DeviceContext, rendertarget, backgroundColor);
+        if (g_window_resized)
+        {
+            device_ctx->lpVtbl->OMSetRenderTargets(device_ctx, 0, 0, 0);
+            rendertarget->lpVtbl->Release(rendertarget);
+
+            HRESULT res = swapchain->lpVtbl->ResizeBuffers(swapchain, 0, 0, 0, DXGI_FORMAT_UNKNOWN, 0);
+            xassert(SUCCEEDED(res));
+
+            ID3D11Texture2D* framebuffer;
+            res = swapchain->lpVtbl->GetBuffer(swapchain, 0, &IID_ID3D11Texture2D, (void**)&framebuffer);
+            xassert(SUCCEEDED(res));
+
+            res = d3d11Device->lpVtbl
+                      ->CreateRenderTargetView(d3d11Device, (ID3D11Resource*)framebuffer, NULL, &rendertarget);
+            xassert(SUCCEEDED(res));
+            framebuffer->lpVtbl->Release(framebuffer);
+
+            g_window_resized = false;
+        }
+
+        FLOAT colour[4] = {1.0f, 0.5f, 1.0f, 1.0f};
+        device_ctx->lpVtbl->ClearRenderTargetView(device_ctx, rendertarget, colour);
+
+        RECT winRect;
+        GetClientRect(hwnd, &winRect);
+        D3D11_VIEWPORT viewport =
+            {0.0f, 0.0f, (FLOAT)(winRect.right - winRect.left), (FLOAT)(winRect.bottom - winRect.top), 0.0f, 1.0f};
+
+        device_ctx->lpVtbl->RSSetViewports(device_ctx, 1, &viewport);
+        device_ctx->lpVtbl->OMSetRenderTargets(device_ctx, 1, &rendertarget, NULL);
+
+        device_ctx->lpVtbl->IASetPrimitiveTopology(device_ctx, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        device_ctx->lpVtbl->IASetInputLayout(device_ctx, inputLayout);
+
+        device_ctx->lpVtbl->VSSetShader(device_ctx, vertexShader, NULL, 0);
+        device_ctx->lpVtbl->PSSetShader(device_ctx, pixelShader, NULL, 0);
+
+        device_ctx->lpVtbl->IASetVertexBuffers(device_ctx, 0, 1, &vertexBuffer, &stride, &offset);
+        device_ctx->lpVtbl->Draw(device_ctx, numVerts, 0);
 
         swapchain->lpVtbl->Present(swapchain, 1, 0);
     }
