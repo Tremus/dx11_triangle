@@ -67,7 +67,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             WS_EX_OVERLAPPEDWINDOW,
             wc.lpszClassName,
             "Triangle",
-            WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+            WS_OVERLAPPEDWINDOW,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
             initialWidth,
@@ -332,6 +332,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             d3d11Device->lpVtbl->CreateBuffer(d3d11Device, &vertexBufferDesc, &vertexSubresourceData, &vertexBuffer);
         xassert(SUCCEEDED(hResult));
     }
+
+    ShowWindow(hwnd, SW_SHOW);
 
     MSG  msg;
     bool running = true;
