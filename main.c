@@ -155,7 +155,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     if (d3dDebug)
     {
         ID3D11InfoQueue* d3dInfoQueue = NULL;
-        if (SUCCEEDED(d3dDebug->lpVtbl->QueryInterface(d3dDebug, &IID_ID3D11InfoQueue, (void**)&d3dInfoQueue)))
+        d3dDebug->lpVtbl->QueryInterface(d3dDebug, &IID_ID3D11InfoQueue, (void**)&d3dInfoQueue);
+        xassert(d3dInfoQueue);
+        if (d3dInfoQueue)
         {
             d3dInfoQueue->lpVtbl->SetBreakOnSeverity(d3dInfoQueue, D3D11_MESSAGE_SEVERITY_CORRUPTION, true);
             d3dInfoQueue->lpVtbl->SetBreakOnSeverity(d3dInfoQueue, D3D11_MESSAGE_SEVERITY_ERROR, true);
@@ -168,8 +170,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     // Create Swap Chain
     IDXGISwapChain1* swapchain;
     {
-        // Get DXGI Factory (needed to create Swap Chain)
-        IDXGIFactory2* dxgi_factory;
+        // Factory2 required to create SwapChain1
+        // https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_2/nn-dxgi1_2-idxgifactory2
+        IDXGIFactory2* factory;
         {
             IDXGIDevice1* dxgiDevice;
             HRESULT hResult = d3d11Device->lpVtbl->QueryInterface(d3d11Device, &IID_IDXGIDevice1, (void**)&dxgiDevice);
@@ -186,7 +189,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             OutputDebugStringA("Graphics Device: ");
             OutputDebugStringW(adapterDesc.Description);
 
-            hResult = dxgiAdapter->lpVtbl->GetParent(dxgiAdapter, &IID_IDXGIFactory2, (void**)&dxgi_factory);
+            hResult = dxgiAdapter->lpVtbl->GetParent(dxgiAdapter, &IID_IDXGIFactory2, (void**)&factory);
             xassert(SUCCEEDED(hResult));
             dxgiAdapter->lpVtbl->Release(dxgiAdapter);
         }
@@ -205,23 +208,23 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         desc.Flags                 = 0;
 
         const DXGI_SWAP_EFFECT swap_effect_types[] = {
-            DXGI_SWAP_EFFECT_DISCARD,
-            DXGI_SWAP_EFFECT_SEQUENTIAL,
-            DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL,
             DXGI_SWAP_EFFECT_FLIP_DISCARD,
+            DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL,
+            DXGI_SWAP_EFFECT_SEQUENTIAL,
+            DXGI_SWAP_EFFECT_DISCARD,
         };
         HRESULT hResult = 0;
-        for (int i = ARRLEN(swap_effect_types); i-- != 0;)
+        for (int i = 0; i < ARRLEN(swap_effect_types); i++)
         {
             desc.SwapEffect = swap_effect_types[i];
-            hResult         = dxgi_factory->lpVtbl
-                          ->CreateSwapChainForHwnd(dxgi_factory, (IUnknown*)d3d11Device, hwnd, &desc, 0, 0, &swapchain);
+            hResult =
+                factory->lpVtbl->CreateSwapChainForHwnd(factory, (IUnknown*)d3d11Device, hwnd, &desc, 0, 0, &swapchain);
             if (SUCCEEDED(hResult))
                 break;
         }
         xassert(SUCCEEDED(hResult));
 
-        dxgi_factory->lpVtbl->Release(dxgi_factory);
+        factory->lpVtbl->Release(factory);
     }
 
     // Create Framebuffer Render Target
