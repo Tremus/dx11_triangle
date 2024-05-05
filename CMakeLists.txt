@@ -21,5 +21,5 @@ add_compile_options(
     -Wno-c++20-extensions
     -Wno-microsoft-enum-forward-reference)
 
-        add_executable(main WIN32 main.c)
-target_compile_definitions(main PRIVATE SHADER_PATH=L"${PROJECT_SOURCE_DIR}/")
+add_executable(main WIN32 main.c)
+target_compile_definitions(main PRIVATE SHADER_PATH=L"${PROJECT_SOURCE_DIR}/shaders/")

@@ -311,6 +311,149 @@ create_shaders_rectangle(
     return hResult;
 }
 
+HRESULT
+create_shaders_circle(
+    ID3D11Device1*       device,
+    ID3D11VertexShader** vertexShader,
+    ID3D11PixelShader**  pixelShader,
+    ID3D11InputLayout**  inputLayout,
+    ID3D11Buffer**       vertexBuffer,
+    UINT*                numVerts,
+    UINT*                stride,
+    UINT*                offset,
+    ID3D11Buffer**       cbuffer)
+{
+    HRESULT hResult = S_OK;
+    // Create Vertex Shader
+    ID3DBlob* vsBlob;
+    {
+        ID3DBlob* err_blob;
+        hResult =
+            D3DCompileFromFile(SHADER_PATH L"circle.hlsl", NULL, NULL, "vs_main", "vs_5_0", 0, 0, &vsBlob, &err_blob);
+        if (FAILED(hResult))
+        {
+            const char* errorString = NULL;
+            if (hResult == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND))
+                errorString = "Could not compile shader; file not found";
+            else if (err_blob)
+            {
+                errorString = (const char*)err_blob->lpVtbl->GetBufferPointer(err_blob);
+                err_blob->lpVtbl->Release(err_blob);
+            }
+            MessageBoxA(0, errorString, "Shader Compiler Error", MB_ICONERROR | MB_OK);
+            return hResult;
+        }
+
+        hResult = device->lpVtbl->CreateVertexShader(
+            device,
+            vsBlob->lpVtbl->GetBufferPointer(vsBlob),
+            vsBlob->lpVtbl->GetBufferSize(vsBlob),
+            NULL,
+            vertexShader);
+        xassert(SUCCEEDED(hResult));
+    }
+
+    // Create Pixel Shader
+    {
+        ID3DBlob* ps_blob;
+        ID3DBlob* err_blob;
+        hResult =
+            D3DCompileFromFile(SHADER_PATH L"circle.hlsl", NULL, NULL, "ps_main", "ps_5_0", 0, 0, &ps_blob, &err_blob);
+        if (FAILED(hResult))
+        {
+            const char* errorString = NULL;
+            if (hResult == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND))
+                errorString = "Could not compile shader; file not found";
+            else if (err_blob)
+            {
+                errorString = (const char*)err_blob->lpVtbl->GetBufferPointer(err_blob);
+                err_blob->lpVtbl->Release(err_blob);
+            }
+            MessageBoxA(0, errorString, "Shader Compiler Error", MB_ICONERROR | MB_OK);
+            return 1;
+        }
+
+        hResult = device->lpVtbl->CreatePixelShader(
+            device,
+            ps_blob->lpVtbl->GetBufferPointer(ps_blob),
+            ps_blob->lpVtbl->GetBufferSize(ps_blob),
+            NULL,
+            pixelShader);
+        xassert(SUCCEEDED(hResult));
+        ps_blob->lpVtbl->Release(ps_blob);
+    }
+
+    // Create Input Layout
+    {
+        D3D11_INPUT_ELEMENT_DESC inputElementDesc[] = {
+            {"POS", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0}};
+
+        hResult = device->lpVtbl->CreateInputLayout(
+            device,
+            inputElementDesc,
+            ARRLEN(inputElementDesc),
+            vsBlob->lpVtbl->GetBufferPointer(vsBlob),
+            vsBlob->lpVtbl->GetBufferSize(vsBlob),
+            inputLayout);
+        xassert(SUCCEEDED(hResult));
+        vsBlob->lpVtbl->Release(vsBlob);
+    }
+
+    // Create Vertex Buffer
+    {
+        struct Vert
+        {
+            float x, y;
+        };
+        // clang-format off
+        struct Vert vertexData[] = {
+            // x,    y,
+            {-1.0f,  1.0f},
+            { 1.0f, -1.0f},
+            {-1.0f, -1.0f},
+
+            {-1.0f,  1.0f},
+            { 1.0f,  1.0f},
+            { 1.0f, -1.0f},
+        };
+        // clang-format on
+        *stride   = sizeof(vertexData[0]);
+        *numVerts = ARRLEN(vertexData);
+        *offset   = 0;
+
+        D3D11_BUFFER_DESC vertexBufferDesc = {0};
+        vertexBufferDesc.ByteWidth         = sizeof(vertexData);
+        vertexBufferDesc.Usage             = D3D11_USAGE_IMMUTABLE;
+        vertexBufferDesc.BindFlags         = D3D11_BIND_VERTEX_BUFFER;
+
+        D3D11_SUBRESOURCE_DATA vertexSubresourceData = {vertexData};
+
+        hResult = device->lpVtbl->CreateBuffer(device, &vertexBufferDesc, &vertexSubresourceData, vertexBuffer);
+        xassert(SUCCEEDED(hResult));
+    }
+
+    // Create constant buffer
+    {
+        float data[4] = {0.0f, 1.0f, 1.0f, 1.0f};
+        // https://learn.microsoft.com/en-us/windows/win32/direct3d11/overviews-direct3d-11-resources-buffers-constant-how-to
+        D3D11_BUFFER_DESC constantBufferDesc = {0};
+        constantBufferDesc.ByteWidth         = sizeof(float) * 4;
+        constantBufferDesc.Usage             = D3D11_USAGE_DYNAMIC;
+        constantBufferDesc.BindFlags         = D3D11_BIND_CONSTANT_BUFFER;
+        constantBufferDesc.CPUAccessFlags    = D3D11_CPU_ACCESS_WRITE;
+
+        D3D11_SUBRESOURCE_DATA InitData;
+        InitData.pSysMem          = &data;
+        InitData.SysMemPitch      = 0;
+        InitData.SysMemSlicePitch = 0;
+
+        hResult = device->lpVtbl->CreateBuffer(device, &constantBufferDesc, &InitData, cbuffer);
+        xassert(hResult == S_OK);
+    }
+
+    return hResult;
+}
+
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
     LRESULT result = 0;
@@ -555,7 +698,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     //     &numVerts,
     //     &stride,
     //     &offset);
-    hResult = create_shaders_rectangle(
+    // hResult = create_shaders_rectangle(
+    //     d3d11Device,
+    //     &vertexShader,
+    //     &pixelShader,
+    //     &inputLayout,
+    //     &vertexBuffer,
+    //     &numVerts,
+    //     &stride,
+    //     &offset,
+    //     &cbuffer);
+    hResult = create_shaders_circle(
         d3d11Device,
         &vertexShader,
         &pixelShader,
