@@ -820,7 +820,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     }
 
     // Create D3D11 Device and Context
-    ID3D11Device1*        d3d11Device;
+    ID3D11Device1*        device;
     ID3D11DeviceContext1* device_ctx;
     {
         ID3D11Device*        baseDevice;
@@ -871,7 +871,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         }
 
         // Get 1.1 interface of D3D11 Device and Context
-        hResult = baseDevice->lpVtbl->QueryInterface(baseDevice, &IID_ID3D11Device1, (void**)&d3d11Device);
+        hResult = baseDevice->lpVtbl->QueryInterface(baseDevice, &IID_ID3D11Device1, (void**)&device);
         xassert(SUCCEEDED(hResult));
         baseDevice->lpVtbl->Release(baseDevice);
 
@@ -886,7 +886,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 #ifndef NDEBUG
     // Set up debug layer to break on D3D11 errors
     ID3D11Debug* d3dDebug = NULL;
-    d3d11Device->lpVtbl->QueryInterface(d3d11Device, &IID_ID3D11Debug, (void**)&d3dDebug);
+    device->lpVtbl->QueryInterface(device, &IID_ID3D11Debug, (void**)&d3dDebug);
     if (d3dDebug)
     {
         ID3D11InfoQueue* d3dInfoQueue = NULL;
@@ -910,7 +910,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         IDXGIFactory2* factory;
         {
             IDXGIDevice1* dxgiDevice;
-            hResult = d3d11Device->lpVtbl->QueryInterface(d3d11Device, &IID_IDXGIDevice1, (void**)&dxgiDevice);
+            hResult = device->lpVtbl->QueryInterface(device, &IID_IDXGIDevice1, (void**)&dxgiDevice);
             xassert(SUCCEEDED(hResult));
 
             IDXGIAdapter* dxgiAdapter;
@@ -953,7 +953,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         {
             desc.SwapEffect = swap_effect_types[i];
             hResult =
-                factory->lpVtbl->CreateSwapChainForHwnd(factory, (IUnknown*)d3d11Device, hwnd, &desc, 0, 0, &swapchain);
+                factory->lpVtbl->CreateSwapChainForHwnd(factory, (IUnknown*)device, hwnd, &desc, 0, 0, &swapchain);
             if (SUCCEEDED(hResult))
                 break;
         }
@@ -969,8 +969,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         hResult = swapchain->lpVtbl->GetBuffer(swapchain, 0, &IID_ID3D11Texture2D, (void**)&framebuffer);
         xassert(SUCCEEDED(hResult));
 
-        hResult =
-            d3d11Device->lpVtbl->CreateRenderTargetView(d3d11Device, (ID3D11Resource*)framebuffer, NULL, &rendertarget);
+        hResult = device->lpVtbl->CreateRenderTargetView(device, (ID3D11Resource*)framebuffer, NULL, &rendertarget);
         xassert(SUCCEEDED(hResult));
         framebuffer->lpVtbl->Release(framebuffer);
     }
@@ -998,7 +997,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     //     &stride,
     //     &offset);
     hResult = create_shaders_rectangle(
-        d3d11Device,
+        device,
         &vertexShader,
         &pixelShader,
         &inputLayout,
@@ -1056,8 +1055,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             hResult = swapchain->lpVtbl->GetBuffer(swapchain, 0, &IID_ID3D11Texture2D, (void**)&framebuffer);
             xassert(SUCCEEDED(hResult));
 
-            hResult = d3d11Device->lpVtbl
-                          ->CreateRenderTargetView(d3d11Device, (ID3D11Resource*)framebuffer, NULL, &rendertarget);
+            hResult = device->lpVtbl->CreateRenderTargetView(device, (ID3D11Resource*)framebuffer, NULL, &rendertarget);
             xassert(SUCCEEDED(hResult));
             framebuffer->lpVtbl->Release(framebuffer);
 
@@ -1099,7 +1097,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     inputLayout->lpVtbl->Release(inputLayout);
 
     device_ctx->lpVtbl->Release(device_ctx);
-    d3d11Device->lpVtbl->Release(d3d11Device);
+    device->lpVtbl->Release(device);
     // d3dDebug->lpVtbl->Release(d3dDebug);
 
     return 0;
