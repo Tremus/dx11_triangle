@@ -2,6 +2,7 @@
 #define NOMINMAX
 #define CINTERFACE
 #define COBJMACROS
+#define UNICODE
 #include <windows.h>
 
 #include <d3d11_1.h>
@@ -767,7 +768,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         g_window_resized = true;
         break;
     default:
-        result = DefWindowProcA(hwnd, msg, wparam, lparam);
+        result = DefWindowProcW(hwnd, msg, wparam, lparam);
     }
     return result;
 }
@@ -777,19 +778,19 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     HRESULT hResult;
     HWND    hwnd;
     {
-        WNDCLASSEXA wc   = {0};
+        WNDCLASSEXW wc   = {0};
         wc.cbSize        = sizeof(wc);
         wc.style         = CS_HREDRAW | CS_VREDRAW;
         wc.lpfnWndProc   = &WndProc;
         wc.hInstance     = hInstance;
-        wc.hIcon         = LoadIconA(NULL, IDI_APPLICATION);
-        wc.hCursor       = LoadCursorA(NULL, IDC_ARROW);
-        wc.lpszClassName = "Triangle";
-        wc.hIconSm       = LoadIconA(NULL, IDI_APPLICATION);
+        wc.hIcon         = LoadIconW(NULL, IDI_APPLICATION);
+        wc.hCursor       = LoadCursorW(NULL, IDC_ARROW);
+        wc.lpszClassName = L"Triangle";
+        wc.hIconSm       = LoadIconW(NULL, IDI_APPLICATION);
 
-        if (! RegisterClassExA(&wc))
+        if (! RegisterClassExW(&wc))
         {
-            MessageBoxA(0, "RegisterClassEx failed", "Fatal Error", MB_OK);
+            MessageBoxW(0, L"RegisterClassEx failed", L"Fatal Error", MB_OK);
             return GetLastError();
         }
 
@@ -798,10 +799,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         LONG initialWidth  = rect.right - rect.left;
         LONG initialHeight = rect.bottom - rect.top;
 
-        hwnd = CreateWindowExA(
+        hwnd = CreateWindowExW(
             WS_EX_OVERLAPPEDWINDOW,
             wc.lpszClassName,
-            "Triangle",
+            L"Triangle",
             WS_OVERLAPPEDWINDOW,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
@@ -814,7 +815,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
         if (! hwnd)
         {
-            MessageBoxA(0, "CreateWindowExA failed", "Fatal Error", MB_OK);
+            MessageBoxW(0, L"CreateWindowExA failed", L"Fatal Error", MB_OK);
             return GetLastError();
         }
     }
@@ -866,7 +867,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
         if (FAILED(hResult))
         {
-            MessageBoxA(0, "D3D11CreateDevice() failed", "Fatal Error", MB_OK);
+            MessageBoxW(0, L"D3D11CreateDevice() failed", L"Fatal Error", MB_OK);
             return GetLastError();
         }
 
@@ -921,7 +922,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             DXGI_ADAPTER_DESC adapterDesc;
             dxgiAdapter->lpVtbl->GetDesc(dxgiAdapter, &adapterDesc);
 
-            OutputDebugStringA("Graphics Device: ");
+            OutputDebugStringW(L"Graphics Device: ");
             OutputDebugStringW(adapterDesc.Description);
 
             hResult = dxgiAdapter->lpVtbl->GetParent(dxgiAdapter, &IID_IDXGIFactory2, (void**)&factory);
@@ -1035,12 +1036,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     bool running = true;
     while (running)
     {
-        while (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE))
+        while (PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE))
         {
             if (msg.message == WM_QUIT)
                 running = false;
             TranslateMessage(&msg);
-            DispatchMessageA(&msg);
+            DispatchMessageW(&msg);
         }
 
         if (g_window_resized)
